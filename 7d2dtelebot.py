@@ -111,7 +111,7 @@ def job_alert_minute(args, active_chats):
 def main():
 
     parser = argparse.ArgumentParser(
-        description='Starts the MoWaT 7 Days to Die telegram bot server'
+        description='Starts the 7 Days to Die telegram bot server'
     )
 
     parser.add_argument(
