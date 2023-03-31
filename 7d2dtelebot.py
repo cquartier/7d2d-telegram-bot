@@ -40,6 +40,7 @@ class SevenDaysToDieServer:
         self._host = host
         self._port = port
         self.address = (host, port)
+        self.active_chats = dict()
 
     def _get_rules(self):
         rules = None
@@ -58,41 +59,43 @@ class SevenDaysToDieServer:
 
         stime = ServerTime(int(rules['CurrentServerTime']))
 
-        if stime.is_blood_moon_day():
-            for cid in active_chats:
-                if not active_chats[cid]['blood_moon']['day_alert']:
-                    await context.bot.send_message(chat_id=cid, text='\U0001f6a8 It is a Blood Moon day! \U0001f6a8')
-                    active_chats[cid]['blood_moon']['day_alert'] = True
-        else:
-            for cid in active_chats:
-                active_chats[cid]['blood_moon']['day_alert'] = False
-        
-        if stime.is_active_blood_moon():
-            for cid in active_chats:
-                if not active_chats[cid]['blood_moon']['start_alert']:
+        for cid in self.active_chats:
+
+            if stime.is_active_blood_moon():
+                if not self.active_chats[cid]['blood_moon']['start_alert']:
                     await context.bot.send_message(chat_id=cid, text='\U0001f6a8\U0001f6a8\U0001f6a8 The Blood Moon has begun! \U0001f6a8\U0001f6a8\U0001f6a8')
-                    active_chats[cid]['blood_moon']['start_alert'] = True
-        else:
-            for cid in active_chats:
-                active_chats[cid]['blood_moon']['start_alert'] = False
+                    logging.info(f"blood moon start alert sent to chat {cid}")
+                    self.active_chats[cid]['blood_moon']['start_alert'] = True
+                else:
+                    self.active_chats[cid]['blood_moon']['start_alert'] = False
+
+            if stime.is_blood_moon_day():
+                if not self.active_chats[cid]['blood_moon']['day_alert']:
+                    await context.bot.send_message(chat_id=cid, text='\U0001f6a8 It is a Blood Moon day! \U0001f6a8')
+                    logging.info(f"blood moon day alert sent to chat {cid}")
+                    self.active_chats[cid]['blood_moon']['day_alert'] = True
+                else:
+                    self.active_chats[cid]['blood_moon']['day_alert'] = False
 
     async def cmd_start(self, update, context):
-        rules = get_rules(args.host, args.port)
-        info = get_info(args.host, args.port)
-        stime = ServerTime(rules['CurrentServerTime'])
-        if update.effective_chat.id not in active_chats:
+        rules = self._get_rules()
+        stime = ServerTime(int(rules['CurrentServerTime']))
+
+        if rules is None:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"\U0000274c Blood Moon Watch could not be started, server did not respond \U0000274c\n\n")
+            return
+        
+        if update.effective_chat.id not in self.active_chats:
             data = {
                 'blood_moon': {
-                    'active': is_active_blood_moon(day, hour),
                     'start_alert': False,
-                    'day_alert': False,
-                    'days_until': days_to_blood_moon(day)
+                    'day_alert': False
                 },
-                'cur_day': day,
-                'cur_hour': hour
+                'cur_day': stime.days,
+                'cur_hour': stime.hours
             }
-            active_chats[update.effective_chat.id] = data
-            logging.info(f"active_chats: {active_chats}")
+            self.active_chats[update.effective_chat.id] = data
+            logging.info(f"active_chats: {self.active_chats}")
             message = f"\U00002705 Starting Blood Moon Watch for this chat \U00002705\n\n"
         else:
             logging.info("this chat already active")
@@ -100,64 +103,23 @@ class SevenDaysToDieServer:
         await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
     async def cmd_status(self, update, context):
-        logging.info('in do_status callback...')
         rules = self._get_rules()
         if rules is None:
-            return
-        logging.info(f"{rules['Players']} out of {info['Max Players']} connected")
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"{info['Players']} out of {info['Max Players']} connected")
+            msg = f"\U0000274c timed out on request. Server dead? \U0000274c"
+        else:
+            msg = f"{rules['CurrentPlayers']} out of {rules['MaxPlayers']} connected"
+            logging.info(msg)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
 
-def get_rules(host, port):
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        packet = b'\xff\xff\xff\xff\x56'
-        s.sendto(packet + b'\xff\xff\xff\xff', (host, port))
-        s.settimeout(10)
-        data, addr = s.recvfrom(128)
-        s.sendto(packet + data[5:], (host, port))
-        s.settimeout(10)
-        data, addr = s.recvfrom(10240)
-    except socket.timeout:
-        logging.error("socket timeout on A2S_RULES request")
-        s.close()
-        return None
-
-    s.close()
-    numKeys = int(data[5])
-    dataStrs = data[7:].split(b'\x00')
-    curKey = 0
-    dataDict = {}
-    while (curKey < numKeys):
-        i = curKey * 2
-        dataDict[dataStrs[i].decode('utf-8')] = dataStrs[i + 1].decode('utf-8')
-        curKey = curKey + 1
-
-    return dataDict
-
-def cmd_start(args, active_chats):
-    
-
-def cmd_status(args):
-    
-
-def cmd_time(args):
-    async def get_time(update, context):
-        rules = get_rules(args.host, args.port)
-        info = get_info(args.host, args.port)
-        if rules is None or info is None:
-            # nothing to do, the server didn't respond. Just return
-            return
-
-        day, hour, minute = get_servertime(int(rules['CurrentServerTime']))
-        state = 'Paused' if info['Players'] == 0 else 'Running'
-        logging.info(f"day {day} {hour:02d}:{minute:02d} ({state})")
-
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"day {day} {hour:02d}:{minute:02d} ({state})")
-    return get_time
-
-def (args, active_chats):
-
-    
+    async def cmd_time(self, update, context):
+        rules = rules = self._get_rules()
+        if rules is None:
+            msg = f"\U0000274c timed out on request. Server dead? \U0000274c"
+        else:
+            stime = ServerTime(int(rules['CurrentServerTime']))
+            msg = f"day {stime.days} {stime.hours:02d}:{stime.minutes:02d} ({'Paused' if rules['CurrentPlayers'] == 0 else 'Running'})"
+            logging.info(msg)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
 
 def main():
 
@@ -181,16 +143,16 @@ def main():
 
     args = parser.parse_args()
 
-    active_chats = dict()
+    server = SevenDaysToDieServer(args.host, args.port)
 
     app = ApplicationBuilder().token(args.token).build()
     job_queue = app.job_queue
 
-    job_minute = job_queue.run_repeating(job_alert_minute(args, active_chats), interval=30, first=10)
+    job_minute = job_queue.run_repeating(server.job_alert_minute, interval=30, first=10)
     
-    start_handler = CommandHandler('start', cmd_start(args, active_chats))
-    status_handler = CommandHandler('status', cmd_status(args))
-    get_time_handler = CommandHandler('time', cmd_time(args))
+    start_handler = CommandHandler('start', server.cmd_start)
+    status_handler = CommandHandler('status', server.cmd_status)
+    get_time_handler = CommandHandler('time', server.cmd_time)
     app.add_handler(start_handler)
     app.add_handler(status_handler)
     app.add_handler(get_time_handler)
