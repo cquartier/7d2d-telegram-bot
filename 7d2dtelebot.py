@@ -81,17 +81,19 @@ class SevenDaysToDieServer:
                 playermsg = f"{diff} player{' has' if diff == 1 else 's have'} {connmsg}{timemsg}"
                 await context.bot.send_message(chat_id=cid, text=playermsg)
 
-            if stime.is_active_blood_moon() and not self.active_chats[cid]['blood_moon']['start_alert']:
-                await context.bot.send_message(chat_id=cid, text='\U0001f6a8\U0001f6a8\U0001f6a8 The Blood Moon has begun! \U0001f6a8\U0001f6a8\U0001f6a8')
-                logging.info(f"blood moon start alert sent to chat {cid}")
-                self.active_chats[cid]['blood_moon']['start_alert'] = True
+            if stime.is_active_blood_moon():
+                if not self.active_chats[cid]['blood_moon']['start_alert']:
+                    await context.bot.send_message(chat_id=cid, text='\U0001f6a8\U0001f6a8\U0001f6a8 The Blood Moon has begun! \U0001f6a8\U0001f6a8\U0001f6a8')
+                    logging.info(f"blood moon start alert sent to chat {cid}")
+                    self.active_chats[cid]['blood_moon']['start_alert'] = True
             else:
                 self.active_chats[cid]['blood_moon']['start_alert'] = False
             
-            if stime.is_blood_moon_day() and not self.active_chats[cid]['blood_moon']['day_alert']:
-                await context.bot.send_message(chat_id=cid, text='\U0001f6a8 It is a Blood Moon day! \U0001f6a8')
-                logging.info(f"blood moon day alert sent to chat {cid}")
-                self.active_chats[cid]['blood_moon']['day_alert'] = True    
+            if stime.is_blood_moon_day():
+                if not self.active_chats[cid]['blood_moon']['day_alert']:
+                    await context.bot.send_message(chat_id=cid, text='\U0001f6a8 It is a Blood Moon day! \U0001f6a8')
+                    logging.info(f"blood moon day alert sent to chat {cid}")
+                    self.active_chats[cid]['blood_moon']['day_alert'] = True    
             else:
                 self.active_chats[cid]['blood_moon']['day_alert'] = False
 
