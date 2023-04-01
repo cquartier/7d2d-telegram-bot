@@ -99,7 +99,7 @@ class SevenDaysToDieServer:
 
             # only send day updates when its not a blood moon day
             if stime.days != last_stime.days and not stime.is_blood_moon_day():
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=f'A New Day: {stime.days} ({7 - (stime.days % 7)} days until the next blood moon)')
+                await context.bot.send_message(chat_id=cid, text=f'A New Day: {stime.days} ({7 - (stime.days % 7)} days until the next blood moon)')
                 logging.info(f"new day alert sent to chat {cid}")
 
             self.active_chats[cid]['last_ticks'] = stime.ticks
